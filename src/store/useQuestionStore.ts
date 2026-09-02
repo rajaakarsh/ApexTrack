@@ -11,6 +11,7 @@ interface QuestionState {
   addQuestions: (count: number, subject: string, dateStr?: string) => void;
   setQuestionsForSubject: (count: number, subject: string, dateStr?: string) => void;
   resetTodayQuestions: () => void;
+  importQuestionLogs: (logs: Record<string, DailyQuestionLog>) => void;
   
   // Helpers
   getTodayLog: () => DailyQuestionLog;
@@ -20,46 +21,13 @@ interface QuestionState {
 
 const getTodayStr = () => new Date().toISOString().split('T')[0];
 
-const generateInitialHistory = (): Record<string, DailyQuestionLog> => {
-  const logs: Record<string, DailyQuestionLog> = {};
-  const today = new Date();
-  
-  for (let i = 14; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
-    
-    if (i === 0) {
-      logs[dateStr] = {
-        id: `q-${dateStr}`,
-        date: dateStr,
-        targetCount: 60,
-        solvedCount: 42,
-        subjectBreakdown: { Physics: 18, Chemistry: 14, Mathematics: 10 },
-      };
-    } else {
-      const solved = Math.floor(45 + Math.random() * 30);
-      logs[dateStr] = {
-        id: `q-${dateStr}`,
-        date: dateStr,
-        targetCount: 60,
-        solvedCount: solved,
-        subjectBreakdown: {
-          Physics: Math.floor(solved * 0.4),
-          Chemistry: Math.floor(solved * 0.35),
-          Mathematics: Math.floor(solved * 0.25),
-        },
-      };
-    }
-  }
-  return logs;
-};
-
 export const useQuestionStore = create<QuestionState>()(
   persist(
     (set, get) => ({
-      dailyTarget: 60,
-      logs: generateInitialHistory(),
+      dailyTarget: 50,
+      logs: {},
+
+      importQuestionLogs: (logs) => set({ logs }),
 
       setDailyTarget: (dailyTarget) => {
         const today = getTodayStr();
@@ -184,10 +152,9 @@ export const useQuestionStore = create<QuestionState>()(
           const dateStr = d.toISOString().split('T')[0];
           const log = logs[dateStr];
 
-          if (log && log.solvedCount >= (log.targetCount || dailyTarget) * 0.6) {
+          if (log && log.solvedCount >= (log.targetCount || dailyTarget) * 0.6 && log.solvedCount > 0) {
             streak++;
           } else if (i === 0) {
-            // Today might still be in progress
             continue;
           } else {
             break;

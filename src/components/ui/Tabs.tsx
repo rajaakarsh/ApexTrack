@@ -1,34 +1,24 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import { cn } from '../../lib/utils';
 
 export interface TabItem {
   id: string;
-  label: React.ReactNode;
-  icon?: React.ReactNode;
-  badge?: string | number;
+  label: string;
+  count?: number;
 }
 
 export interface TabsProps {
   tabs: TabItem[];
   activeTab: string;
-  onChange: (id: string) => void;
+  onChange: (tabId: string) => void;
   className?: string;
-  variant?: 'pill' | 'underline';
 }
 
-export const Tabs: React.FC<TabsProps> = ({
-  tabs,
-  activeTab,
-  onChange,
-  className,
-  variant = 'pill',
-}) => {
+export const Tabs: React.FC<TabsProps> = ({ tabs, activeTab, onChange, className }) => {
   return (
     <div
       className={cn(
-        'flex items-center gap-1.5 p-1 rounded-xl',
-        variant === 'pill' ? 'bg-slate-900/90 border border-slate-800' : 'border-b border-slate-800',
+        'inline-flex items-center gap-1 p-1 rounded-lg bg-zinc-900 border border-zinc-800/80',
         className
       )}
     >
@@ -37,29 +27,24 @@ export const Tabs: React.FC<TabsProps> = ({
         return (
           <button
             key={tab.id}
+            type="button"
             onClick={() => onChange(tab.id)}
             className={cn(
-              'relative flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors z-10 select-none',
-              isActive ? 'text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+              'px-3 py-1 rounded-md text-xs font-medium transition-colors select-none flex items-center gap-1.5',
+              isActive
+                ? 'bg-zinc-800 text-zinc-100 shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40'
             )}
           >
-            {isActive && variant === 'pill' && (
-              <motion.div
-                layoutId="active-tab-bg"
-                className="absolute inset-0 bg-brand-500 rounded-lg -z-10 shadow-sm shadow-brand-500/30"
-                transition={{ type: 'spring', damping: 25, stiffness: 400 }}
-              />
-            )}
-            {tab.icon && <span className="w-3.5 h-3.5 flex items-center">{tab.icon}</span>}
             <span>{tab.label}</span>
-            {tab.badge !== undefined && (
+            {tab.count !== undefined && (
               <span
                 className={cn(
-                  'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
-                  isActive ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-slate-400'
+                  'text-[10px] px-1.5 py-0.2 rounded font-mono',
+                  isActive ? 'bg-zinc-700 text-zinc-200' : 'bg-zinc-800 text-zinc-500'
                 )}
               >
-                {tab.badge}
+                {tab.count}
               </span>
             )}
           </button>

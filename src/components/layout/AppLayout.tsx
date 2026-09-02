@@ -7,10 +7,14 @@ import { QuickTaskModal } from './QuickTaskModal';
 import { MergeDataModal } from './MergeDataModal';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useTimerStore } from '../../store/useTimerStore';
+import { useSupabaseSync } from '../../hooks/useSupabaseSync';
 
 export const AppLayout: React.FC = () => {
   const { settings } = useSettingsStore();
   const { tick } = useTimerStore();
+
+  // Hydrate & synchronize state with Supabase PostgreSQL
+  useSupabaseSync();
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [quickTaskOpen, setQuickTaskOpen] = useState(false);

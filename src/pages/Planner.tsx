@@ -1,586 +1,413 @@
 import React, { useState } from 'react';
 import {
   Plus,
-  Search,
   Filter,
-  Calendar as CalendarIcon,
-  CheckSquare,
-  Clock,
-  Trash2,
-  Edit2,
+  CheckCircle2,
   Calendar,
-  LayoutGrid,
-  List as ListIcon,
+  Trash2,
+  Search,
+  List,
+  Columns3,
   Download,
-  Flame,
-  ArrowRight,
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Input, Textarea } from '../components/ui/Input';
+import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { PriorityBadge, StatusBadge } from '../components/ui/Badge';
 import { useTaskStore } from '../store/useTaskStore';
-import { useSyllabusStore } from '../store/useSyllabusStore';
 import { useAppStore } from '../store/useAppStore';
+import { useAuth } from '../context/AuthContext';
+import { taskService } from '../services/taskService';
 import { Priority, Task, TaskStatus } from '../types';
 import { exportTasksToICS } from '../lib/icsExport';
 import { fireCelebrationConfetti } from '../components/ui/Confetti';
 
 export const Planner: React.FC = () => {
   const { profile } = useAppStore();
-  const {
-    tasks,
-    addTask,
-    updateTask,
-    deleteTask,
-    setTaskStatus,
-    searchQuery,
-    setSearchQuery,
-    selectedSubject,
-    setSelectedSubject,
-    selectedPriority,
-    setSelectedPriority,
-  } = useTaskStore();
+  const { user, isGuest } = useAuth();
+  const { tasks, addTask, updateTask, deleteTask, setTaskStatus } = useTaskStore();
 
-  const { subjects } = useSyllabusStore();
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [selectedSubject, setSelectedSubject] = useState('All');
+  const [selectedPriority, setSelectedPriority] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+  // Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [subject, setSubject] = useState(subjects[0]?.name || 'Physics');
+  const [subject, setSubject] = useState('Physics');
   const [priority, setPriority] = useState<Priority>('medium');
-  const [status, setStatus] = useState<TaskStatus>('todo');
-  const [duration, setDuration] = useState(45);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [estimatedDuration, setEstimatedDuration] = useState(45);
 
-  // Open Add Modal
-  const handleOpenAdd = () => {
+  const handleOpenAddModal = () => {
     setEditingTask(null);
     setTitle('');
     setDescription('');
-    setSubject(subjects[0]?.name || 'Physics');
+    setSubject('Physics');
     setPriority('medium');
-    setStatus('todo');
-    setDuration(45);
     setDate(new Date().toISOString().split('T')[0]);
+    setEstimatedDuration(45);
     setModalOpen(true);
   };
 
-  // Open Edit Modal
-  const handleOpenEdit = (task: Task) => {
-    setEditingTask(task);
-    setTitle(task.title);
-    setDescription(task.description || '');
-    setSubject(task.subject);
-    setPriority(task.priority);
-    setStatus(task.status);
-    setDuration(task.estimatedDuration || 30);
-    setDate(task.date);
-    setModalOpen(true);
-  };
-
-  const handleSave = (e: React.FormEvent) => {
+  const handleSaveTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
 
     if (editingTask) {
       updateTask(editingTask.id, {
-        title: title.trim(),
-        description: description.trim() || undefined,
+        title,
+        description,
         subject,
         priority,
-        status,
         date,
-        estimatedDuration: Number(duration),
+        estimatedDuration: Number(estimatedDuration),
       });
+
+      if (user && !isGuest) {
+        await taskService.updateTask(user.id, editingTask.id, {
+          title,
+          description,
+          subject,
+          priority,
+          date,
+          estimatedDuration: Number(estimatedDuration),
+        });
+      }
     } else {
-      addTask({
-        title: title.trim(),
-        description: description.trim() || undefined,
+      const newTask: Task = {
+        id: 't-' + Date.now(),
+        title,
+        description,
         subject,
         priority,
-        status,
+        status: 'todo',
         date,
-        estimatedDuration: Number(duration),
-      });
+        estimatedDuration: Number(estimatedDuration),
+        createdAt: new Date().toISOString(),
+      };
+
+      addTask(newTask);
+
+      if (user && !isGuest) {
+        await taskService.createTask(user.id, newTask);
+      }
     }
 
     setModalOpen(false);
   };
 
-  const handleToggleComplete = (task: Task) => {
-    const nextStatus: TaskStatus = task.status === 'done' ? 'todo' : 'done';
-    setTaskStatus(task.id, nextStatus);
+  const handleToggleDone = async (taskId: string, currentStatus: TaskStatus) => {
+    const nextStatus = currentStatus === 'done' ? 'todo' : 'done';
+    setTaskStatus(taskId, nextStatus);
+
     if (nextStatus === 'done') {
       fireCelebrationConfetti();
     }
+
+    if (user && !isGuest) {
+      await taskService.updateTask(user.id, taskId, {
+        status: nextStatus,
+        completedAt: nextStatus === 'done' ? new Date().toISOString() : undefined,
+      });
+    }
   };
 
-  // Filtered Tasks
+  const handleDelete = async (taskId: string) => {
+    deleteTask(taskId);
+    if (user && !isGuest) {
+      await taskService.deleteTask(user.id, taskId);
+    }
+  };
+
+  // Filter tasks
   const filteredTasks = tasks.filter((t) => {
-    const matchesSearch =
+    const matchSubj = selectedSubject === 'All' || t.subject === selectedSubject;
+    const matchPri = selectedPriority === 'All' || t.priority === selectedPriority;
+    const matchSearch =
       t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesSubject = selectedSubject === 'all' || t.subject === selectedSubject;
-    const matchesPriority = selectedPriority === 'all' || t.priority === selectedPriority;
-    return matchesSearch && matchesSubject && matchesPriority;
+      (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchSubj && matchPri && matchSearch;
   });
 
-  const todoTasks = filteredTasks.filter((t) => t.status === 'todo');
-  const inProgressTasks = filteredTasks.filter((t) => t.status === 'in_progress');
-  const doneTasks = filteredTasks.filter((t) => t.status === 'done');
+  const subjects = ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'General'];
 
   return (
-    <div className="space-y-6">
-      {/* Header & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="max-w-5xl mx-auto space-y-6 pb-12">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-5">
         <div>
-          <h2 className="text-2xl font-extrabold text-slate-100 flex items-center gap-2">
-            <CheckSquare className="w-6 h-6 text-brand-400" />
-            Study Planner & Tasks
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Organize daily preparation milestones, prioritize high-weightage topics, and maintain momentum.
-          </p>
+          <h2 className="text-xl font-bold tracking-tight text-zinc-100">Study Planner</h2>
+          <p className="text-xs text-zinc-400 mt-0.5">Manage and organize your preparation schedule.</p>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          {/* Export to ICS */}
+        <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="inline-flex items-center p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded-md text-xs transition-colors ${
+                viewMode === 'list' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setViewMode('kanban')}
+              className={`p-1.5 rounded-md text-xs transition-colors ${
+                viewMode === 'kanban' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Columns3 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           <Button
             size="sm"
             variant="outline"
             onClick={() => exportTasksToICS(tasks, profile.targetExam)}
-            className="text-xs"
-            title="Export tasks to Calendar (.ics)"
+            className="text-xs gap-1.5"
           >
-            <Download className="w-3.5 h-3.5 mr-1.5" />
-            Export Calendar
+            <Download className="w-3 h-3" /> Export .ics
           </Button>
 
-          {/* View Toggle */}
-          <div className="flex items-center bg-slate-900 border border-slate-800 p-1 rounded-xl">
-            <button
-              onClick={() => setViewMode('kanban')}
-              className={`p-1.5 rounded-lg text-xs transition-colors ${
-                viewMode === 'kanban' ? 'bg-slate-800 text-brand-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="Kanban Board View"
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded-lg text-xs transition-colors ${
-                viewMode === 'list' ? 'bg-slate-800 text-brand-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="Table List View"
-            >
-              <ListIcon className="w-4 h-4" />
-            </button>
-          </div>
-
-          <Button size="sm" variant="glow" onClick={handleOpenAdd} className="text-xs gap-1.5">
-            <Plus className="w-4 h-4" /> Add Task
+          <Button size="sm" variant="primary" onClick={handleOpenAddModal} className="text-xs gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> Add Task
           </Button>
         </div>
       </div>
 
-      {/* Filter Controls Bar */}
-      <Card className="p-4 space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-          {/* Search */}
-          <div className="sm:col-span-2">
-            <Input
-              placeholder="Search tasks or chapters..."
-              leftIcon={<Search className="w-4 h-4" />}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+      {/* Filter Bar */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <input
+            type="text"
+            placeholder="Search tasks..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-8.5 rounded-lg bg-zinc-900/50 border border-zinc-800 pl-8.5 pr-3 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
+          />
+        </div>
 
-          {/* Subject Filter */}
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedSubject}
+            onChange={(e) => setSelectedSubject(e.target.value)}
+            className="h-8.5 bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 text-xs text-zinc-300 focus:outline-none focus:border-zinc-600 transition-colors"
+          >
+            <option value="All">All Subjects</option>
+            {subjects.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={selectedPriority}
+            onChange={(e) => setSelectedPriority(e.target.value)}
+            className="h-8.5 bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 text-xs text-zinc-300 focus:outline-none focus:border-zinc-600 transition-colors"
+          >
+            <option value="All">All Priorities</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+      </div>
+
+      {/* List View */}
+      {viewMode === 'list' && (
+        <div className="rounded-xl bg-[#111111] border border-zinc-800/80 divide-y divide-zinc-800/60 overflow-hidden">
+          {filteredTasks.length === 0 ? (
+            <div className="py-12 text-center space-y-2">
+              <p className="text-xs text-zinc-500">No tasks found matching your filters.</p>
+              <Button size="sm" variant="secondary" onClick={handleOpenAddModal}>
+                Create New Task
+              </Button>
+            </div>
+          ) : (
+            filteredTasks.map((task) => (
+              <div
+                key={task.id}
+                className="p-3.5 flex items-center justify-between gap-3 hover:bg-zinc-900/40 transition-colors"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <button
+                    onClick={() => handleToggleDone(task.id, task.status)}
+                    className={`w-4 h-4 rounded border flex items-center justify-center transition-colors flex-shrink-0 ${
+                      task.status === 'done'
+                        ? 'bg-zinc-200 border-zinc-200 text-zinc-950 font-bold text-[10px]'
+                        : 'border-zinc-700 hover:border-zinc-500'
+                    }`}
+                  >
+                    {task.status === 'done' && '✓'}
+                  </button>
+
+                  <div className="min-w-0">
+                    <p
+                      className={`text-xs font-medium truncate ${
+                        task.status === 'done' ? 'line-through text-zinc-500' : 'text-zinc-200'
+                      }`}
+                    >
+                      {task.title}
+                    </p>
+                    <div className="flex items-center gap-2 mt-0.5 text-[11px] text-zinc-500">
+                      <span>{task.subject}</span>
+                      <span>•</span>
+                      <span>{task.estimatedDuration}m</span>
+                      <span>•</span>
+                      <span>{task.date}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5 flex-shrink-0">
+                  <PriorityBadge priority={task.priority} />
+                  <StatusBadge status={task.status} />
+                  <button
+                    onClick={() => handleDelete(task.id)}
+                    className="p-1 text-zinc-500 hover:text-rose-400 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Kanban View */}
+      {viewMode === 'kanban' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {(['todo', 'in_progress', 'done'] as TaskStatus[]).map((status) => {
+            const columnTasks = filteredTasks.filter((t) => t.status === status);
+            const titles = { todo: 'To Do', in_progress: 'In Progress', done: 'Done' };
+
+            return (
+              <div key={status} className="space-y-3">
+                <div className="flex items-center justify-between pb-1 border-b border-zinc-800 text-xs font-semibold text-zinc-300">
+                  <span>{titles[status]}</span>
+                  <span className="text-[11px] font-mono text-zinc-500">{columnTasks.length}</span>
+                </div>
+
+                <div className="space-y-2">
+                  {columnTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className="p-3.5 rounded-xl bg-[#111111] border border-zinc-800/80 space-y-2 hover:border-zinc-700 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-xs font-medium text-zinc-200 leading-snug">{task.title}</p>
+                        <PriorityBadge priority={task.priority} />
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-zinc-800/40 text-[11px] text-zinc-500">
+                        <span>{task.subject}</span>
+                        <div className="flex items-center gap-1.5">
+                          {status !== 'done' && (
+                            <button
+                              onClick={() => handleToggleDone(task.id, task.status)}
+                              className="text-[10px] text-zinc-400 hover:text-zinc-100"
+                            >
+                              Complete ✓
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDelete(task.id)}
+                            className="text-zinc-500 hover:text-rose-400"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Task Modal */}
+      <Modal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editingTask ? 'Edit Task' : 'Add New Task'}
+      >
+        <form onSubmit={handleSaveTask} className="space-y-4 pt-1">
+          <Input
+            label="Task Title"
+            placeholder="e.g. Solve 30 Rotation Kinematics PYQs"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+          />
+
           <div>
+            <label className="block text-xs font-medium text-zinc-300 mb-1.5">Subject</label>
             <select
-              value={selectedSubject}
-              onChange={(e) => setSelectedSubject(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-500"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="w-full h-9 bg-zinc-900 border border-zinc-800 rounded-lg px-3 text-xs text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors"
             >
-              <option value="all">All Subjects</option>
               {subjects.map((s) => (
-                <option key={s.id} value={s.name}>
-                  {s.name}
+                <option key={s} value={s}>
+                  {s}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Priority Filter */}
-          <div>
-            <select
-              value={selectedPriority}
-              onChange={(e) => setSelectedPriority(e.target.value as Priority | 'all')}
-              className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-500"
-            >
-              <option value="all">All Priorities</option>
-              <option value="high">High Priority</option>
-              <option value="medium">Medium Priority</option>
-              <option value="low">Low Priority</option>
-            </select>
-          </div>
-        </div>
-      </Card>
-
-      {/* View 1: KANBAN BOARD */}
-      {viewMode === 'kanban' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {/* Column 1: TO DO */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between px-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />
-                To Do ({todoTasks.length})
-              </span>
-              <button onClick={handleOpenAdd} className="p-1 rounded text-slate-400 hover:text-slate-100">
-                <Plus className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3 min-h-[300px] p-2 rounded-2xl bg-slate-900/40 border border-slate-800/80">
-              {todoTasks.length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-500">No tasks to do</div>
-              ) : (
-                todoTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onStatusChange={(newStatus) => setTaskStatus(task.id, newStatus)}
-                    onEdit={() => handleOpenEdit(task)}
-                    onDelete={() => deleteTask(task.id)}
-                    onToggleComplete={() => handleToggleComplete(task)}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Column 2: IN PROGRESS */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between px-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
-                In Progress ({inProgressTasks.length})
-              </span>
-            </div>
-
-            <div className="space-y-3 min-h-[300px] p-2 rounded-2xl bg-slate-900/40 border border-slate-800/80">
-              {inProgressTasks.length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-500">No tasks in progress</div>
-              ) : (
-                inProgressTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onStatusChange={(newStatus) => setTaskStatus(task.id, newStatus)}
-                    onEdit={() => handleOpenEdit(task)}
-                    onDelete={() => deleteTask(task.id)}
-                    onToggleComplete={() => handleToggleComplete(task)}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Column 3: DONE */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between px-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                Completed ({doneTasks.length})
-              </span>
-            </div>
-
-            <div className="space-y-3 min-h-[300px] p-2 rounded-2xl bg-slate-900/40 border border-slate-800/80">
-              {doneTasks.length === 0 ? (
-                <div className="py-12 text-center text-xs text-slate-500">No completed tasks yet</div>
-              ) : (
-                doneTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onStatusChange={(newStatus) => setTaskStatus(task.id, newStatus)}
-                    onEdit={() => handleOpenEdit(task)}
-                    onDelete={() => deleteTask(task.id)}
-                    onToggleComplete={() => handleToggleComplete(task)}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* View 2: LIST / TABLE VIEW */}
-      {viewMode === 'list' && (
-        <Card className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-200">
-            <thead className="bg-slate-900/80 text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
-              <tr>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4">Title & Description</th>
-                <th className="py-3 px-4">Subject</th>
-                <th className="py-3 px-4">Priority</th>
-                <th className="py-3 px-4">Duration</th>
-                <th className="py-3 px-4">Date</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {filteredTasks.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-500">
-                    No matching tasks found.
-                  </td>
-                </tr>
-              ) : (
-                filteredTasks.map((task) => (
-                  <tr key={task.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3 px-4">
-                      <button
-                        onClick={() => handleToggleComplete(task)}
-                        className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                          task.status === 'done'
-                            ? 'bg-brand-500 border-brand-500 text-slate-950 font-black'
-                            : 'border-slate-600 hover:border-brand-500'
-                        }`}
-                      >
-                        {task.status === 'done' && '✓'}
-                      </button>
-                    </td>
-                    <td className="py-3 px-4">
-                      <p className={`font-semibold ${task.status === 'done' ? 'line-through text-slate-500' : 'text-slate-100'}`}>
-                        {task.title}
-                      </p>
-                      {task.description && (
-                        <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">{task.description}</p>
-                      )}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="text-brand-400 font-medium">{task.subject}</span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <PriorityBadge priority={task.priority} />
-                    </td>
-                    <td className="py-3 px-4 font-mono">{task.estimatedDuration}m</td>
-                    <td className="py-3 px-4 font-mono text-slate-400">{task.date}</td>
-                    <td className="py-3 px-4 text-right space-x-1">
-                      <button
-                        onClick={() => handleOpenEdit(task)}
-                        className="p-1 rounded text-slate-400 hover:text-slate-100"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => deleteTask(task.id)}
-                        className="p-1 rounded text-slate-400 hover:text-rose-400"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </Card>
-      )}
-
-      {/* Task Create / Edit Modal */}
-      <Modal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={editingTask ? 'Edit Study Task' : 'Create New Study Task'}
-      >
-        <form onSubmit={handleSave} className="space-y-4 pt-1">
-          <Input
-            label="Task Title"
-            placeholder="e.g. Solve 25 Mechanics PYQ Problems"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-            autoFocus
-          />
-
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">Subject</label>
-              <select
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand-500"
-              >
-                {subjects.map((s) => (
-                  <option key={s.id} value={s.name}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">Priority</label>
+              <label className="block text-xs font-medium text-zinc-300 mb-1.5">Priority</label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as Priority)}
-                className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand-500"
+                className="w-full h-9 bg-zinc-900 border border-zinc-800 rounded-lg px-3 text-xs text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors"
               >
                 <option value="high">High Priority</option>
                 <option value="medium">Medium Priority</option>
                 <option value="low">Low Priority</option>
               </select>
             </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">Status</label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand-500"
-              >
-                <option value="todo">To Do</option>
-                <option value="in_progress">In Progress</option>
-                <option value="done">Done</option>
-              </select>
-            </div>
 
             <Input
-              label="Duration (mins)"
+              label="Duration (min)"
               type="number"
               min={5}
-              max={480}
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-            />
-
-            <Input
-              label="Date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
+              max={360}
+              value={estimatedDuration}
+              onChange={(e) => setEstimatedDuration(Number(e.target.value))}
             />
           </div>
 
-          <Textarea
-            label="Notes / Instructions (Optional)"
-            placeholder="Focus on advanced questions 15 to 30..."
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
+          <Input
+            label="Target Date"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
           />
 
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
-            <Button type="button" variant="ghost" onClick={() => setModalOpen(false)}>
+          <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+            <Button variant="ghost" type="button" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" variant="glow">
-              {editingTask ? 'Update Task' : 'Save Task'}
+            <Button variant="primary" type="submit">
+              {editingTask ? 'Save Changes' : 'Create Task'}
             </Button>
           </div>
         </form>
       </Modal>
-    </div>
-  );
-};
-
-// Task Card Component for Kanban Board
-const TaskCard: React.FC<{
-  task: Task;
-  onStatusChange: (status: TaskStatus) => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  onToggleComplete: () => void;
-}> = ({ task, onStatusChange, onEdit, onDelete, onToggleComplete }) => {
-  return (
-    <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 transition-all space-y-3 group shadow-sm">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-start gap-2.5 min-w-0">
-          <button
-            onClick={onToggleComplete}
-            className={`w-4 h-4 rounded mt-0.5 border flex items-center justify-center transition-colors flex-shrink-0 ${
-              task.status === 'done'
-                ? 'bg-brand-500 border-brand-500 text-slate-950 font-black text-[10px]'
-                : 'border-slate-600 hover:border-brand-500'
-            }`}
-          >
-            {task.status === 'done' && '✓'}
-          </button>
-          <h4
-            className={`text-xs font-semibold leading-snug ${
-              task.status === 'done' ? 'line-through text-slate-500' : 'text-slate-100'
-            }`}
-          >
-            {task.title}
-          </h4>
-        </div>
-
-        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
-          <button onClick={onEdit} className="p-1 text-slate-400 hover:text-slate-100">
-            <Edit2 className="w-3 h-3" />
-          </button>
-          <button onClick={onDelete} className="p-1 text-slate-400 hover:text-rose-400">
-            <Trash2 className="w-3 h-3" />
-          </button>
-        </div>
-      </div>
-
-      {task.description && (
-        <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">{task.description}</p>
-      )}
-
-      <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px]">
-        <span className="text-brand-400 font-medium">{task.subject}</span>
-        <div className="flex items-center gap-1.5 text-slate-400 font-mono">
-          <Clock className="w-3 h-3" />
-          <span>{task.estimatedDuration}m</span>
-        </div>
-      </div>
-
-      {/* Quick Move Status Buttons */}
-      <div className="flex items-center justify-between gap-1 pt-1">
-        <PriorityBadge priority={task.priority} />
-        <div className="flex items-center gap-1 text-[10px]">
-          {task.status !== 'todo' && (
-            <button
-              onClick={() => onStatusChange('todo')}
-              className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 hover:text-slate-200"
-            >
-              ← Todo
-            </button>
-          )}
-          {task.status !== 'in_progress' && (
-            <button
-              onClick={() => onStatusChange('in_progress')}
-              className="px-1.5 py-0.5 rounded bg-slate-800 text-amber-300 hover:bg-amber-500/20"
-            >
-              Progress
-            </button>
-          )}
-          {task.status !== 'done' && (
-            <button
-              onClick={() => onStatusChange('done')}
-              className="px-1.5 py-0.5 rounded bg-slate-800 text-emerald-300 hover:bg-emerald-500/20"
-            >
-              Done ✓
-            </button>
-          )}
-        </div>
-      </div>
     </div>
   );
 };

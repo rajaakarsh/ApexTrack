@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase, signInWithGoogle as supabaseSignInWithGoogle, signOut as supabaseSignOut, getOrCreateUserProfile, isSupabaseConfigured } from '../lib/supabase';
+import { supabase, signInWithGoogle as supabaseSignInWithGoogle, signOut as supabaseSignOut, isSupabaseConfigured, User, Session } from '../lib/supabase';
+import { profileService } from '../services/profileService';
 import { useAppStore } from '../store/useAppStore';
-import { UserProfile } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -10,7 +9,7 @@ interface AuthContextType {
   loading: boolean;
   isGuest: boolean;
   isConfigured: boolean;
-  signInWithGoogle: () => Promise<{ error: Error | null }>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   continueAsGuest: () => void;
 }
@@ -25,64 +24,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return localStorage.getItem('apextrack-guest-mode') === 'true';
   });
 
-  const { setProfile, loginWithAccount, logout: storeLogout } = useAppStore();
-  const isConfigured = isSupabaseConfigured();
+  const { loginWithAccount, logout: storeLogout } = useAppStore();
+  const isConfigured = isSupabaseConfigured;
 
   useEffect(() => {
-    let mounted = true;
+    let isMounted = true;
 
-    // 1. Check current session on startup
-    const initAuth = async () => {
+    // 1. Check existing session on application launch
+    const checkInitialSession = async () => {
       try {
-        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
 
         if (error) {
           console.warn('Error fetching Supabase session:', error.message);
         }
 
-        if (mounted) {
-          if (initialSession?.user) {
-            setSession(initialSession);
-            setUser(initialSession.user);
-            setIsGuest(false);
-            localStorage.setItem('apextrack-guest-mode', 'false');
+        if (currentSession?.user && isMounted) {
+          setSession(currentSession);
+          setUser(currentSession.user);
+          setIsGuest(false);
+          localStorage.setItem('apextrack-guest-mode', 'false');
 
-            // Fetch and sync profile
-            const userProfile = await getOrCreateUserProfile(initialSession.user);
-            if (userProfile && mounted) {
-              loginWithAccount({
-                id: userProfile.id,
-                displayName: userProfile.display_name,
-                avatarUrl: userProfile.avatar_url,
-                targetExam: userProfile.target_exam || 'JEE Advanced',
-                targetYear: userProfile.target_year || 2026,
-                examDate: userProfile.exam_date || '2026-05-24',
-                peerCode: userProfile.peer_code,
-                isGuest: false,
-              });
-            }
-          } else {
-            setSession(null);
-            setUser(null);
+          const profile = await profileService.getOrCreateProfile(currentSession.user);
+          if (profile && isMounted) {
+            loginWithAccount({
+              id: profile.id,
+              displayName: profile.displayName,
+              email: profile.email,
+              avatarUrl: profile.avatarUrl,
+              targetExam: profile.targetExam || 'JEE Advanced',
+              targetYear: profile.targetYear || 2026,
+              examDate: profile.examDate || '2026-05-24',
+              peerCode: profile.peerCode,
+              isGuest: false,
+            });
           }
         }
       } catch (err) {
-        console.error('Auth initialization error:', err);
+        console.error('Initial session check error:', err);
       } finally {
-        if (mounted) {
+        if (isMounted) {
           setLoading(false);
         }
       }
     };
 
-    initAuth();
+    checkInitialSession();
 
-    // 2. Subscribe to Supabase Auth State Changes
+    // 2. Subscribe to Supabase Auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        if (!mounted) return;
+        if (!isMounted) return;
 
-        console.log(`[Supabase Auth] Event: ${event}`);
+        console.log(`[Supabase Auth] State Change: ${event}`);
 
         if (currentSession?.user) {
           setSession(currentSession);
@@ -90,17 +84,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsGuest(false);
           localStorage.setItem('apextrack-guest-mode', 'false');
 
-          if (event === 'SIGNED_IN') {
-            const userProfile = await getOrCreateUserProfile(currentSession.user);
-            if (userProfile && mounted) {
+          if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+            const profile = await profileService.getOrCreateProfile(currentSession.user);
+            if (profile && isMounted) {
               loginWithAccount({
-                id: userProfile.id,
-                displayName: userProfile.display_name,
-                avatarUrl: userProfile.avatar_url,
-                targetExam: userProfile.target_exam || 'JEE Advanced',
-                targetYear: userProfile.target_year || 2026,
-                examDate: userProfile.exam_date || '2026-05-24',
-                peerCode: userProfile.peer_code,
+                id: profile.id,
+                displayName: profile.displayName,
+                email: profile.email,
+                avatarUrl: profile.avatarUrl,
+                targetExam: profile.targetExam || 'JEE Advanced',
+                targetYear: profile.targetYear || 2026,
+                examDate: profile.examDate || '2026-05-24',
+                peerCode: profile.peerCode,
                 isGuest: false,
               });
             }
@@ -118,21 +113,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     return () => {
-      mounted = false;
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, [loginWithAccount, storeLogout]);
 
   const signInWithGoogle = async () => {
-    try {
-      const { error } = await supabaseSignInWithGoogle();
-      if (error) {
-        return { error };
-      }
-      return { error: null };
-    } catch (err) {
-      return { error: err as Error };
-    }
+    await supabaseSignInWithGoogle();
   };
 
   const signOut = async () => {

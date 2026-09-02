@@ -18,6 +18,7 @@ interface SyllabusState {
   
   // Chapter progress
   setChapterStatus: (subjectId: string, unitId: string, chapterId: string, status: ChapterProgressStatus) => void;
+  importSyllabusProgress: (progressMap: Record<string, ChapterProgressStatus>) => void;
   updateChapterNotes: (subjectId: string, unitId: string, chapterId: string, notes: string) => void;
   
   // Resources
@@ -77,6 +78,23 @@ export const useSyllabusStore = create<SyllabusState>()(
               }),
             };
           }),
+        }));
+      },
+
+      importSyllabusProgress: (progressMap) => {
+        set((state) => ({
+          subjects: state.subjects.map((subj) => ({
+            ...subj,
+            units: subj.units.map((unit) => ({
+              ...unit,
+              chapters: unit.chapters.map((ch) => {
+                if (progressMap[ch.id]) {
+                  return { ...ch, status: progressMap[ch.id] };
+                }
+                return ch;
+              }),
+            })),
+          })),
         }));
       },
 

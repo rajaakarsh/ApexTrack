@@ -1,5 +1,5 @@
 -- ====================================================================
--- APEXTRACK STUDY OPERATING SYSTEM - SUPABASE POSTGRESQL SCHEMA
+-- APEXTRACK STUDY OPERATING SYSTEM - COMPLETE DATABASE MIGRATION
 -- ====================================================================
 
 -- 1. Enable UUID Extension
@@ -15,7 +15,7 @@ create table if not exists public.profiles (
   target_year integer not null default 2026,
   exam_date date default '2026-05-24',
   peer_code text unique not null default substring(md5(random()::text) from 1 for 8),
-  live_status text default 'idle', -- 'focusing', 'idle', 'offline'
+  live_status text default 'idle',
   current_subject text,
   streak_count integer default 1,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
@@ -140,6 +140,15 @@ create table if not exists public.daily_question_logs (
 );
 
 -- ====================================================================
+-- INDEXES FOR PERFORMANCE
+-- ====================================================================
+create index if not exists idx_tasks_user_date on public.tasks(user_id, date);
+create index if not exists idx_focus_sessions_user_date on public.focus_sessions(user_id, date);
+create index if not exists idx_targets_user_category on public.targets(user_id, category);
+create index if not exists idx_mock_tests_user_date on public.mock_tests(user_id, date);
+create index if not exists idx_error_logs_user_subject on public.error_logs(user_id, subject);
+
+-- ====================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- ====================================================================
 
@@ -153,7 +162,7 @@ alter table public.mock_tests enable row level security;
 alter table public.error_logs enable row level security;
 alter table public.daily_question_logs enable row level security;
 
--- Profiles: Authenticated users can read public stats; users can insert/update their own
+-- Profiles Policies
 create policy "Users can view all public profiles"
   on public.profiles for select using (auth.role() = 'authenticated');
 create policy "Users can insert own profile"
@@ -161,35 +170,35 @@ create policy "Users can insert own profile"
 create policy "Users can update own profile"
   on public.profiles for update using (auth.uid() = id);
 
--- Settings: Only owner
+-- Settings Policies
 create policy "Users can manage own settings"
   on public.user_settings for all using (auth.uid() = user_id);
 
--- Tasks: Only owner
+-- Tasks Policies
 create policy "Users can manage own tasks"
   on public.tasks for all using (auth.uid() = user_id);
 
--- Targets: Only owner
+-- Targets Policies
 create policy "Users can manage own targets"
   on public.targets for all using (auth.uid() = user_id);
 
--- Focus Sessions: Only owner
+-- Focus Sessions Policies
 create policy "Users can manage own focus sessions"
   on public.focus_sessions for all using (auth.uid() = user_id);
 
--- Syllabus: Only owner
+-- Syllabus Policies
 create policy "Users can manage own syllabus progress"
   on public.syllabus_progress for all using (auth.uid() = user_id);
 
--- Mock Tests: Only owner
+-- Mock Tests Policies
 create policy "Users can manage own mock tests"
   on public.mock_tests for all using (auth.uid() = user_id);
 
--- Error Logs: Only owner
+-- Error Logs Policies
 create policy "Users can manage own error logs"
   on public.error_logs for all using (auth.uid() = user_id);
 
--- Daily Questions: Only owner
+-- Daily Questions Policies
 create policy "Users can manage own daily questions"
   on public.daily_question_logs for all using (auth.uid() = user_id);
 
@@ -212,7 +221,6 @@ begin
 end;
 $$ language plpgsql security definer;
 
--- Attach trigger to auth.users
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users

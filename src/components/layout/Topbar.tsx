@@ -1,24 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import {
-  Plus,
-  Play,
-  Pause,
-  Cloud,
-  CloudOff,
-  Bell,
-  Sparkles,
-  Menu,
-  Clock,
-  LogOut,
-} from 'lucide-react';
+import { Plus, Menu, Clock, Bell, LogOut } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuth } from '../../context/AuthContext';
 import { useSettingsStore } from '../../store/useSettingsStore';
-import { useTimerStore } from '../../store/useTimerStore';
 import { usePeerStore } from '../../store/usePeerStore';
 import { Button } from '../ui/Button';
-import { calculateExamCountdown, formatTimerClock } from '../../lib/utils';
+import { calculateExamCountdown } from '../../lib/utils';
 
 export interface TopbarProps {
   onOpenQuickTask: () => void;
@@ -28,184 +16,110 @@ export interface TopbarProps {
 export const Topbar: React.FC<TopbarProps> = ({ onOpenQuickTask, onToggleMobileNav }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { profile, setMergeModalOpen } = useAppStore();
-  const { user, isGuest, signOut } = useAuth();
+  const { profile } = useAppStore();
+  const { user, isGuest } = useAuth();
   const { settings } = useSettingsStore();
-  const { isRunning, isPaused, secondsLeft, mode, startTimer, pauseTimer, resumeTimer } = useTimerStore();
   const { incomingNudges, dismissNudge } = usePeerStore();
   const [showNotifications, setShowNotifications] = useState(false);
 
   const countdown = calculateExamCountdown(profile.examDate);
 
-  // Derive route title
   const getPageTitle = (pathname: string) => {
-    if (pathname.includes('planner')) return { title: 'Study Planner', desc: 'Manage and prioritize your daily preparation tasks' };
-    if (pathname.includes('targets')) return { title: 'Preparation Targets', desc: 'Weekly sprints and long-term milestones' };
-    if (pathname.includes('timer')) return { title: 'Deep Work Focus Timer', desc: 'Structured focus blocks with ambient sound synthesis' };
-    if (pathname.includes('syllabus')) return { title: 'Syllabus Tracker', desc: 'Hierarchical progress tracking across all subjects' };
-    if (pathname.includes('analytics')) return { title: 'Focus Analytics', desc: 'Comprehensive study momentum and consistency heatmaps' };
-    if (pathname.includes('mocks')) return { title: 'Mock Test Analytics', desc: 'Score trajectories and accuracy evaluations' };
-    if (pathname.includes('error-log')) return { title: 'Mistake & Error Log', desc: 'Diagnose weak areas and conceptual pitfalls' };
-    if (pathname.includes('daily-questions')) return { title: 'Daily Questions Tracker', desc: 'Solve volume throughput and subject consistency' };
-    if (pathname.includes('peers')) return { title: 'Accountability Peers', desc: 'Live partner study statuses and high-fives' };
-    if (pathname.includes('groups')) return { title: 'Study Groups', desc: 'Collaborative cohort rooms and leaderboards' };
-    if (pathname.includes('leaderboard')) return { title: 'Global Leaderboard', desc: 'Rankings based on pure focused study hours' };
-    if (pathname.includes('settings')) return { title: 'System Settings', desc: 'Themes, typography, wallpapers, and backups' };
-    return { title: 'Dashboard', desc: 'Track your preparation and stay consistent.' };
+    if (pathname.includes('planner')) return 'Planner';
+    if (pathname.includes('targets')) return 'Targets';
+    if (pathname.includes('timer')) return 'Focus';
+    if (pathname.includes('syllabus')) return 'Syllabus';
+    if (pathname.includes('analytics')) return 'Analytics';
+    if (pathname.includes('mocks')) return 'Mock Tests';
+    if (pathname.includes('error-log')) return 'Error Log';
+    if (pathname.includes('daily-questions')) return 'Daily Questions';
+    if (pathname.includes('peers')) return 'Peers';
+    if (pathname.includes('groups')) return 'Study Groups';
+    if (pathname.includes('leaderboard')) return 'Leaderboard';
+    if (pathname.includes('settings')) return 'Settings';
+    return 'Overview';
   };
 
-  const pageInfo = getPageTitle(location.pathname);
+  const title = getPageTitle(location.pathname);
   const avatarUrl = profile.avatarUrl || user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
   const displayName = profile.displayName || user?.user_metadata?.full_name || 'Aspirant';
 
   return (
-    <header className="h-16 border-b border-slate-800/80 bg-[#090d16]/85 backdrop-blur-2xl px-4 md:px-6 flex items-center justify-between sticky top-0 z-20">
-      {/* Left: Mobile Toggle & Page Title Header */}
+    <header className="h-14 border-b border-zinc-800/80 bg-[#0A0A0A] px-4 md:px-6 flex items-center justify-between sticky top-0 z-20">
+      {/* Left: Mobile Toggle & Page Title */}
       <div className="flex items-center gap-3">
         <button
           onClick={onToggleMobileNav}
-          className="md:hidden p-2 rounded-xl text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
+          className="md:hidden p-1.5 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
         >
-          <Menu className="w-5 h-5" />
+          <Menu className="w-4 h-4" />
         </button>
-
-        <div className="hidden sm:block">
-          <h2 className="text-sm font-bold text-slate-100 leading-tight">{pageInfo.title}</h2>
-          <p className="text-[11px] text-slate-400 leading-tight truncate max-w-xs md:max-w-md">{pageInfo.desc}</p>
-        </div>
+        <h1 className="text-sm font-semibold text-zinc-100">{title}</h1>
       </div>
 
-      {/* Right: Actions, Countdown, Quick Timer, Notifications, Profile */}
-      <div className="flex items-center gap-2.5">
+      {/* Right: Actions */}
+      <div className="flex items-center gap-3">
         {/* Exam Countdown Pill */}
         {settings.showCountdown && (
           <div
             onClick={() => navigate('/app/settings')}
-            className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 cursor-pointer transition-all duration-150"
-            title="Click to configure exam date in Settings"
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:border-zinc-700 cursor-pointer transition-colors"
           >
-            <Clock className="w-3.5 h-3.5 text-brand-400" />
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="font-extrabold text-slate-100 font-mono text-sm tracking-tight text-brand-400">
-                {countdown.days}d
-              </span>
-              <span className="text-[11px] text-slate-400">to {profile.targetExam}</span>
-            </div>
+            <Clock className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="font-mono font-medium text-zinc-100">{countdown.days}d</span>
+            <span className="text-zinc-500">to {profile.targetExam}</span>
           </div>
         )}
-
-        {/* Quick Timer Control Widget */}
-        <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800">
-          <div className="text-right">
-            <span className="text-[9px] text-slate-400 uppercase font-mono block leading-none font-bold">
-              {mode} {isRunning ? (isPaused ? 'Paused' : 'Active') : 'Idle'}
-            </span>
-            <span className="text-xs font-bold font-mono text-slate-100">
-              {formatTimerClock(secondsLeft)}
-            </span>
-          </div>
-
-          {!isRunning ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="p-1 h-6 w-6 text-brand-400 hover:bg-brand-500/20"
-              onClick={() => {
-                startTimer();
-                navigate('/app/timer');
-              }}
-            >
-              <Play className="w-3 h-3 fill-current" />
-            </Button>
-          ) : isPaused ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="p-1 h-6 w-6 text-emerald-400 hover:bg-emerald-500/20"
-              onClick={resumeTimer}
-            >
-              <Play className="w-3 h-3 fill-current" />
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="p-1 h-6 w-6 text-amber-400 hover:bg-amber-500/20"
-              onClick={pauseTimer}
-            >
-              <Pause className="w-3 h-3 fill-current" />
-            </Button>
-          )}
-        </div>
 
         {/* Quick Add Task Button */}
         <Button
           size="sm"
-          variant="glow"
+          variant="secondary"
           onClick={onOpenQuickTask}
-          className="gap-1.5 text-xs font-bold shadow-glow-sm h-8 px-3"
+          className="gap-1.5 text-xs h-7.5"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>Add Task</span>
+          <span>New Task</span>
+          <kbd className="hidden md:inline text-[9px] font-mono text-zinc-500 bg-zinc-800 px-1 py-0.2 rounded border border-zinc-700 ml-1">
+            ⌘K
+          </kbd>
         </Button>
 
-        {/* Cloud Sync Status */}
-        {isGuest ? (
-          <button
-            onClick={() => navigate('/login')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-amber-300 hover:border-amber-500/40 text-xs transition-colors"
-            title="Running in local guest mode. Click to sign in with Google."
-          >
-            <CloudOff className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden xl:inline text-[11px] font-medium text-amber-400">Guest Mode</span>
-          </button>
-        ) : (
-          <div
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-emerald-400 text-xs"
-            title={`Authenticated as ${user?.email}`}
-          >
-            <Cloud className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline text-[11px] font-medium">Google Synced</span>
-          </div>
-        )}
-
-        {/* Notifications Dropdown */}
+        {/* Notifications */}
         <div className="relative">
           <button
             onClick={() => setShowNotifications(!showNotifications)}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-100 hover:bg-slate-800 relative transition-colors"
+            className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 relative transition-colors"
           >
             <Bell className="w-4 h-4" />
             {incomingNudges.length > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
+              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-zinc-100" />
             )}
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 rounded-2xl glass-dropdown p-4 shadow-2xl z-50 text-slate-100 space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Peer Nudges & Alerts</span>
-                <span className="text-[10px] bg-brand-500/20 text-brand-300 px-1.5 py-0.5 rounded font-mono font-bold">
-                  {incomingNudges.length} New
-                </span>
+            <div className="absolute right-0 mt-2 w-72 rounded-xl bg-[#111111] border border-zinc-800 p-4 shadow-xl z-50 text-zinc-100 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-zinc-800 text-xs font-semibold text-zinc-300">
+                <span>Notifications</span>
+                <span className="text-[10px] text-zinc-500 font-mono">{incomingNudges.length}</span>
               </div>
 
               {incomingNudges.length === 0 ? (
-                <p className="text-xs text-slate-400 py-3 text-center">No new notifications</p>
+                <p className="text-xs text-zinc-500 py-2 text-center">No notifications</p>
               ) : (
-                <div className="space-y-2 max-h-60 overflow-y-auto">
+                <div className="space-y-2 max-h-52 overflow-y-auto">
                   {incomingNudges.map((nudge) => (
                     <div
                       key={nudge.id}
-                      className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-start justify-between gap-2"
+                      className="p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/80 flex items-start justify-between gap-2"
                     >
                       <div>
-                        <p className="text-xs font-semibold text-brand-300">{nudge.from}</p>
-                        <p className="text-xs text-slate-300 mt-0.5">{nudge.message}</p>
+                        <p className="text-xs font-medium text-zinc-200">{nudge.from}</p>
+                        <p className="text-xs text-zinc-400 mt-0.5">{nudge.message}</p>
                       </div>
                       <button
                         onClick={() => dismissNudge(nudge.id)}
-                        className="text-[10px] text-slate-400 hover:text-slate-200"
+                        className="text-[10px] text-zinc-500 hover:text-zinc-300"
                       >
                         Dismiss
                       </button>
@@ -217,11 +131,10 @@ export const Topbar: React.FC<TopbarProps> = ({ onOpenQuickTask, onToggleMobileN
           )}
         </div>
 
-        {/* Profile Avatar Trigger */}
+        {/* User Profile Avatar */}
         <div
           onClick={() => navigate('/app/settings')}
-          className="w-8 h-8 rounded-xl bg-slate-800 overflow-hidden flex items-center justify-center font-bold text-xs text-brand-400 border border-slate-700 cursor-pointer hover:border-brand-500 transition-colors"
-          title="Account Settings"
+          className="w-7 h-7 rounded-md bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center text-xs font-medium text-zinc-200 cursor-pointer hover:border-zinc-500 transition-colors"
         >
           {avatarUrl ? (
             <img src={avatarUrl} alt="" className="w-full h-full object-cover" />

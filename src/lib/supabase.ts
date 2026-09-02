@@ -1,114 +1,68 @@
-import { createClient, User } from '@supabase/supabase-js';
-import { generatePeerCode } from './utils';
+import { createClient } from '@supabase/supabase-js';
+import type { User, Session } from '@supabase/supabase-js';
 
-// Read from Vite environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://sample-project.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sample-anon-key';
+const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const rawSupabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
 
-export const isSupabaseConfigured = (): boolean => {
-  const url = import.meta.env.VITE_SUPABASE_URL;
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  return Boolean(
-    url &&
-    key &&
-    !url.includes('sample-project') &&
-    !url.includes('your-project') &&
-    key !== 'your-anon-key-here' &&
-    key !== 'sample-anon-key'
+// Check if valid credentials are provided
+export const isSupabaseConfigured = Boolean(
+  rawSupabaseUrl &&
+  rawSupabaseKey &&
+  rawSupabaseUrl.startsWith('https://') &&
+  !rawSupabaseUrl.includes('placeholder') &&
+  !rawSupabaseUrl.includes('your-project-ref')
+);
+
+if (!isSupabaseConfigured) {
+  console.warn(
+    '[Supabase] Missing or incomplete environment variables. Please set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env.local.'
   );
-};
+}
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+// Fallback dummy credentials to prevent createClient from throwing at module initialization time
+const supabaseUrl = isSupabaseConfigured ? rawSupabaseUrl! : 'https://placeholder.supabase.co';
+const supabasePublishableKey = isSupabaseConfigured ? rawSupabaseKey! : 'sb_publishable_dummy_key';
+
+// Centralized Supabase client instance
+export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    storage: window.localStorage,
   },
 });
 
 // Google OAuth Sign In
 export async function signInWithGoogle() {
-  if (!isSupabaseConfigured()) {
-    console.warn(
-      'Supabase is not yet configured with real API keys in .env. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.'
+  if (!isSupabaseConfigured) {
+    throw new Error(
+      'Supabase URL or Publishable Key is not configured. Please add your Supabase project credentials to .env.local.'
     );
   }
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: `${window.location.origin}/auth/callback`,
-      queryParams: {
-        access_type: 'offline',
-        prompt: 'consent',
-      },
+      redirectTo: `${window.location.origin}/`,
     },
   });
 
-  return { data, error };
+  if (error) {
+    console.error('[Supabase Auth] Google OAuth error:', error);
+    throw error;
+  }
+
+  return data;
 }
 
 // Sign Out
 export async function signOut() {
+  if (!isSupabaseConfigured) return;
   const { error } = await supabase.auth.signOut();
-  return { error };
-}
-
-// Get or create user profile in public.profiles table
-export async function getOrCreateUserProfile(user: User) {
-  if (!user) return null;
-
-  try {
-    // 1. Try to fetch existing profile
-    const { data: existingProfile, error: fetchError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-
-    if (existingProfile && !fetchError) {
-      return existingProfile;
-    }
-
-    // 2. Extract Google metadata
-    const meta = user.user_metadata || {};
-    const displayName =
-      meta.full_name ||
-      meta.name ||
-      user.email?.split('@')[0] ||
-      'Aspirant';
-    const avatarUrl = meta.avatar_url || meta.picture || undefined;
-
-    const newProfile = {
-      id: user.id,
-      email: user.email,
-      display_name: displayName,
-      avatar_url: avatarUrl,
-      target_exam: 'JEE Advanced',
-      target_year: 2026,
-      exam_date: '2026-05-24',
-      peer_code: generatePeerCode(),
-      live_status: 'idle',
-      streak_count: 1,
-      updated_at: new Date().toISOString(),
-    };
-
-    // 3. Insert new profile into Supabase
-    const { data: inserted, error: insertError } = await supabase
-      .from('profiles')
-      .upsert(newProfile)
-      .select()
-      .single();
-
-    if (insertError) {
-      console.warn('Could not insert profile to Supabase database:', insertError.message);
-      return newProfile;
-    }
-
-    return inserted || newProfile;
-  } catch (err) {
-    console.error('Error in getOrCreateUserProfile:', err);
-    return null;
+  if (error) {
+    console.error('[Supabase Auth] Sign out error:', error);
+    throw error;
   }
 }
+
+export type { User, Session };

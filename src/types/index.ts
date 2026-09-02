@@ -17,6 +17,7 @@ export type FontFamily = 'Outfit' | 'Inter' | 'Plus Jakarta Sans' | 'JetBrains M
 export interface UserProfile {
   id: string;
   displayName: string;
+  email?: string;
   targetExam: string;
   targetYear: number;
   examDate: string; // YYYY-MM-DD

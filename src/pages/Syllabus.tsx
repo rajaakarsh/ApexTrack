@@ -1,458 +1,281 @@
 import React, { useState } from 'react';
 import {
-  BookOpen,
-  Plus,
-  Search,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Link as LinkIcon,
   ExternalLink,
-  Book,
-  FileText,
-  Video,
-  Globe,
-  Trash2,
-  Sparkles,
-  Layers,
+  Plus,
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Input, Textarea } from '../components/ui/Input';
+import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
-import { ProgressRing } from '../components/ui/ProgressRing';
 import { useSyllabusStore } from '../store/useSyllabusStore';
-import { ChapterProgressStatus, ChapterResource, ResourceType, SyllabusChapter, SyllabusUnit } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { syllabusService } from '../services/syllabusService';
+import { ChapterProgressStatus, ResourceType, SyllabusChapter } from '../types';
 import { fireCelebrationConfetti } from '../components/ui/Confetti';
 
 export const Syllabus: React.FC = () => {
+  const { user, isGuest } = useAuth();
   const {
     subjects,
     activeSubjectId,
     setActiveSubjectId,
-    searchQuery,
-    setSearchQuery,
     setChapterStatus,
     addResource,
-    deleteResource,
-    addCustomSubject,
-    addCustomUnit,
-    addCustomChapter,
-    deleteChapter,
-    getOverallProgress,
     getSubjectProgress,
+    getOverallProgress,
   } = useSyllabusStore();
 
   const [expandedUnits, setExpandedUnits] = useState<Record<string, boolean>>({});
   const [resourceModalOpen, setResourceModalOpen] = useState(false);
-  const [selectedChapterForResource, setSelectedChapterForResource] = useState<{
-    subjectId: string;
+  const [selectedChapter, setSelectedChapter] = useState<{
     unitId: string;
-    chapterId: string;
-    chapterName: string;
+    chapter: SyllabusChapter;
   } | null>(null);
 
   // New Resource Form
-  const [resTitle, setResTitle] = useState('');
-  const [resType, setResType] = useState<ResourceType>('book');
-  const [resUrl, setResUrl] = useState('');
+  const [resourceTitle, setResourceTitle] = useState('');
+  const [resourceType, setResourceType] = useState<ResourceType>('notes');
+  const [resourceUrl, setResourceUrl] = useState('');
 
-  // Custom addition modals
-  const [addChapterModalOpen, setAddChapterModalOpen] = useState(false);
-  const [selectedUnitForChapter, setSelectedUnitForChapter] = useState<string>('');
-  const [newChapterName, setNewChapterName] = useState('');
-  const [newSubtopics, setNewSubtopics] = useState('');
-
-  const activeSubject = subjects.find((s) => s.id === activeSubjectId) || subjects[0];
-  const overallProgress = getOverallProgress();
+  const currentSubject =
+    subjects.find((s) => s.id === activeSubjectId) || subjects[0];
 
   const toggleUnit = (unitId: string) => {
     setExpandedUnits((prev) => ({
       ...prev,
-      [unitId]: prev[unitId] === undefined ? false : !prev[unitId],
+      [unitId]: !prev[unitId],
     }));
   };
 
-  const handleStatusChange = (
-    subjectId: string,
-    unitId: string,
-    chapterId: string,
-    newStatus: ChapterProgressStatus
-  ) => {
-    setChapterStatus(subjectId, unitId, chapterId, newStatus);
-    if (newStatus === 'completed') {
+  const handleStatusChange = async (unitId: string, chapterId: string, status: ChapterProgressStatus) => {
+    setChapterStatus(currentSubject.id, unitId, chapterId, status);
+    if (status === 'completed') {
       fireCelebrationConfetti();
+    }
+    if (user && !isGuest) {
+      await syllabusService.saveChapterStatus(user.id, chapterId, status);
     }
   };
 
-  const handleOpenResourceModal = (subjectId: string, unitId: string, ch: SyllabusChapter) => {
-    setSelectedChapterForResource({
-      subjectId,
-      unitId,
-      chapterId: ch.id,
-      chapterName: ch.name,
-    });
-    setResTitle('');
-    setResType('book');
-    setResUrl('');
+  const handleOpenResourceModal = (unitId: string, chapter: SyllabusChapter) => {
+    setSelectedChapter({ unitId, chapter });
+    setResourceTitle('');
+    setResourceType('notes');
+    setResourceUrl('');
     setResourceModalOpen(true);
   };
 
-  const handleSaveResource = (e: React.FormEvent) => {
+  const handleAddResource = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resTitle.trim() || !selectedChapterForResource) return;
+    if (!selectedChapter || !resourceTitle.trim()) return;
 
-    addResource(
-      selectedChapterForResource.subjectId,
-      selectedChapterForResource.unitId,
-      selectedChapterForResource.chapterId,
-      {
-        title: resTitle.trim(),
-        type: resType,
-        url: resUrl.trim() || undefined,
-      }
-    );
+    addResource(currentSubject.id, selectedChapter.unitId, selectedChapter.chapter.id, {
+      title: resourceTitle,
+      type: resourceType,
+      url: resourceUrl || undefined,
+    });
 
     setResourceModalOpen(false);
   };
 
-  const handleSaveCustomChapter = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newChapterName.trim() || !activeSubject || !selectedUnitForChapter) return;
-
-    const subtopicsList = newSubtopics
-      .split('\n')
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    addCustomChapter(activeSubject.id, selectedUnitForChapter, newChapterName.trim(), subtopicsList);
-    setNewChapterName('');
-    setNewSubtopics('');
-    setAddChapterModalOpen(false);
-  };
-
-  const statusConfig: Record<
-    ChapterProgressStatus,
-    { label: string; color: string; bg: string; border: string }
-  > = {
-    not_started: { label: 'Not Started', color: 'text-slate-400', bg: 'bg-slate-800', border: 'border-slate-700' },
-    learning: { label: 'Learning In-Progress', color: 'text-amber-400', bg: 'bg-amber-500/15', border: 'border-amber-500/30' },
-    revision: { label: 'Revision Phase', color: 'text-sky-400', bg: 'bg-sky-500/15', border: 'border-sky-500/30' },
-    completed: { label: 'Mastered & Completed', color: 'text-emerald-400', bg: 'bg-emerald-500/15', border: 'border-emerald-500/30' },
+  const statusMap = {
+    not_started: { label: 'Not Started', class: 'bg-zinc-800 text-zinc-500 border-zinc-700/50' },
+    learning: { label: 'Learning', class: 'bg-sky-500/10 text-sky-400 border-sky-500/20' },
+    revision: { label: 'Revision', class: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+    completed: { label: 'Completed', class: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
   };
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-5xl mx-auto space-y-8 pb-12">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-5">
         <div>
-          <h2 className="text-2xl font-extrabold text-slate-100 flex items-center gap-2">
-            <BookOpen className="w-6 h-6 text-brand-400" />
-            Hierarchical Syllabus Tracker
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Subject → Unit → Chapter → Subtopic progress states with linked learning materials.
+          <h2 className="text-xl font-bold tracking-tight text-zinc-100">Syllabus Tracker</h2>
+          <p className="text-xs text-zinc-400 mt-0.5">
+            4-Tier preparation coverage • {getOverallProgress()}% Overall Completion
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-            <span className="text-slate-400">Total Exam Readiness:</span>
-            <span className="font-mono font-bold text-brand-400">{overallProgress}%</span>
-          </div>
+        {/* Subject Switcher Pills */}
+        <div className="flex items-center gap-1.5 p-1 rounded-lg bg-zinc-900 border border-zinc-800 overflow-x-auto">
+          {subjects.map((s) => {
+            const isActive = s.id === currentSubject.id;
+            const prog = getSubjectProgress(s.id);
+            return (
+              <button
+                key={s.id}
+                onClick={() => setActiveSubjectId(s.id)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                  isActive
+                    ? 'bg-zinc-800 text-zinc-100 shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <span>{s.name}</span>
+                <span className="text-[10px] font-mono text-zinc-500">{prog}%</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Subject Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-3">
-        {subjects.map((subj) => {
-          const isActive = subj.id === activeSubject?.id;
-          const prog = getSubjectProgress(subj.id);
+      {/* Units & Chapters Accordions */}
+      <div className="space-y-4">
+        {currentSubject.units.map((unit) => {
+          const isExpanded = expandedUnits[unit.id] !== false; // default expanded
+          const completedCount = unit.chapters.filter((c) => c.status === 'completed').length;
+          const unitPct = Math.round((completedCount / unit.chapters.length) * 100) || 0;
+
           return (
-            <button
-              key={subj.id}
-              onClick={() => setActiveSubjectId(subj.id)}
-              className={`flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                isActive
-                  ? 'bg-brand-500 text-slate-950 shadow-glow-sm'
-                  : 'bg-slate-900 border border-slate-800 text-slate-300 hover:border-slate-700'
-              }`}
+            <div
+              key={unit.id}
+              className="rounded-xl bg-[#111111] border border-zinc-800/80 overflow-hidden"
             >
-              <span>{subj.name}</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                  isActive ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-slate-400'
-                }`}
+              {/* Unit Header */}
+              <div
+                onClick={() => toggleUnit(unit.id)}
+                className="p-4 flex items-center justify-between cursor-pointer hover:bg-zinc-900/40 transition-colors select-none"
               >
-                {prog}%
-              </span>
-            </button>
+                <div className="flex items-center gap-2.5">
+                  {isExpanded ? (
+                    <ChevronDown className="w-4 h-4 text-zinc-400" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-zinc-400" />
+                  )}
+                  <h3 className="text-xs font-semibold text-zinc-200">{unit.name}</h3>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] font-mono text-zinc-500">
+                    {completedCount} / {unit.chapters.length} ({unitPct}%)
+                  </span>
+                </div>
+              </div>
+
+              {/* Chapters List */}
+              {isExpanded && (
+                <div className="border-t border-zinc-800/60 divide-y divide-zinc-800/40">
+                  {unit.chapters.map((chapter) => (
+                    <div
+                      key={chapter.id}
+                      className="p-4 pl-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-zinc-900/30 transition-colors"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-zinc-200">{chapter.name}</span>
+                        </div>
+
+                        {chapter.subtopics && chapter.subtopics.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {chapter.subtopics.map((st, idx) => (
+                              <span
+                                key={idx}
+                                className="text-[10px] px-1.5 py-0.2 rounded bg-zinc-900 border border-zinc-800 text-zinc-400"
+                              >
+                                {st}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {chapter.resources && chapter.resources.length > 0 && (
+                          <div className="flex items-center gap-2 pt-1 text-[11px] text-zinc-400">
+                            {chapter.resources.map((res) => (
+                              <a
+                                key={res.id}
+                                href={res.url || '#'}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 hover:text-zinc-200 underline decoration-zinc-700"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                <span>{res.title}</span>
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Status Selector & Resource Action */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <select
+                          value={chapter.status}
+                          onChange={(e) =>
+                            handleStatusChange(unit.id, chapter.id, e.target.value as ChapterProgressStatus)
+                          }
+                          className={`h-7.5 text-[11px] font-medium rounded-lg px-2.5 border focus:outline-none transition-colors ${
+                            statusMap[chapter.status].class
+                          }`}
+                        >
+                          <option value="not_started">Not Started</option>
+                          <option value="learning">Learning</option>
+                          <option value="revision">Revision</option>
+                          <option value="completed">Completed ✓</option>
+                        </select>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenResourceModal(unit.id, chapter)}
+                          className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                          title="Attach Resource"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
 
-      {/* Active Subject Units & Chapters Accordion */}
-      {activeSubject && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-extrabold text-slate-100 uppercase tracking-wider flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: activeSubject.color || '#10b981' }} />
-              {activeSubject.name} Units & Chapters
-            </h3>
-            <span className="text-xs text-slate-400 font-mono">
-              {activeSubject.units.reduce((a, u) => a + u.chapters.length, 0)} Total Chapters
-            </span>
-          </div>
-
-          <div className="space-y-3">
-            {activeSubject.units.map((unit) => {
-              const isExpanded = expandedUnits[unit.id] !== false; // expanded by default
-              const unitCompleted = unit.chapters.filter((c) => c.status === 'completed').length;
-              const unitPct =
-                unit.chapters.length > 0
-                  ? Math.round((unitCompleted / unit.chapters.length) * 100)
-                  : 0;
-
-              return (
-                <div
-                  key={unit.id}
-                  className="rounded-2xl bg-slate-900/80 border border-slate-800 overflow-hidden shadow-glass"
-                >
-                  {/* Unit Accordion Header */}
-                  <div
-                    onClick={() => toggleUnit(unit.id)}
-                    className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-800/40 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      {isExpanded ? (
-                        <ChevronDown className="w-4 h-4 text-slate-400" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 text-slate-400" />
-                      )}
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-100">{unit.name}</h4>
-                        <span className="text-[11px] text-slate-400">
-                          {unitCompleted} of {unit.chapters.length} chapters completed ({unitPct}%)
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="w-24 bg-slate-800 rounded-full h-2 hidden sm:block">
-                        <div
-                          className="bg-brand-500 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${unitPct}%` }}
-                        />
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedUnitForChapter(unit.id);
-                          setAddChapterModalOpen(true);
-                        }}
-                        className="p-1 rounded text-slate-400 hover:text-slate-100"
-                        title="Add chapter to unit"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Chapters List */}
-                  {isExpanded && (
-                    <div className="p-4 pt-0 space-y-3 divide-y divide-slate-800/60">
-                      {unit.chapters.map((chapter) => {
-                        const status = statusConfig[chapter.status];
-                        return (
-                          <div
-                            key={chapter.id}
-                            className="pt-3 first:pt-0 flex flex-col md:flex-row md:items-center justify-between gap-3"
-                          >
-                            <div className="space-y-1.5 flex-1">
-                              <div className="flex items-center gap-2">
-                                <h5 className="text-xs font-bold text-slate-100">{chapter.name}</h5>
-                                <span
-                                  className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${status.bg} ${status.color} border ${status.border}`}
-                                >
-                                  {status.label}
-                                </span>
-                              </div>
-
-                              {/* Subtopics Pills */}
-                              {chapter.subtopics && chapter.subtopics.length > 0 && (
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  {chapter.subtopics.map((sub, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="text-[10px] px-2 py-0.5 rounded-md bg-slate-950 border border-slate-800 text-slate-400"
-                                    >
-                                      {sub}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-
-                              {/* Linked Resources */}
-                              {chapter.resources && chapter.resources.length > 0 && (
-                                <div className="flex flex-wrap items-center gap-2 pt-1">
-                                  {chapter.resources.map((res) => (
-                                    <div
-                                      key={res.id}
-                                      className="inline-flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded-md bg-brand-500/10 border border-brand-500/30 text-brand-300"
-                                    >
-                                      {res.type === 'book' ? (
-                                        <Book className="w-3 h-3" />
-                                      ) : res.type === 'video' ? (
-                                        <Video className="w-3 h-3" />
-                                      ) : (
-                                        <FileText className="w-3 h-3" />
-                                      )}
-                                      <span>{res.title}</span>
-                                      {res.url && (
-                                        <a
-                                          href={res.url}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="text-brand-400 hover:text-brand-200"
-                                        >
-                                          <ExternalLink className="w-2.5 h-2.5" />
-                                        </a>
-                                      )}
-                                      <button
-                                        onClick={() =>
-                                          deleteResource(activeSubject.id, unit.id, chapter.id, res.id)
-                                        }
-                                        className="text-slate-500 hover:text-rose-400 ml-1"
-                                      >
-                                        ×
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Status Changer & Resource Buttons */}
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <select
-                                value={chapter.status}
-                                onChange={(e) =>
-                                  handleStatusChange(
-                                    activeSubject.id,
-                                    unit.id,
-                                    chapter.id,
-                                    e.target.value as ChapterProgressStatus
-                                  )
-                                }
-                                className="bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-xs text-slate-100 font-semibold focus:outline-none focus:border-brand-500"
-                              >
-                                <option value="not_started">Not Started</option>
-                                <option value="learning">Learning</option>
-                                <option value="revision">Revision</option>
-                                <option value="completed">Completed ✓</option>
-                              </select>
-
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleOpenResourceModal(activeSubject.id, unit.id, chapter)}
-                                className="text-[11px] h-8 px-2.5 gap-1"
-                              >
-                                <Plus className="w-3 h-3" /> Resource
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Add Resource */}
+      {/* Resource Modal */}
       <Modal
         isOpen={resourceModalOpen}
         onClose={() => setResourceModalOpen(false)}
-        title={`Add Study Material / Resource`}
-        description={`Linking resource to: ${selectedChapterForResource?.chapterName}`}
+        title="Attach Reference Resource"
+        description={selectedChapter?.chapter.name}
       >
-        <form onSubmit={handleSaveResource} className="space-y-4 pt-1">
+        <form onSubmit={handleAddResource} className="space-y-4 pt-1">
           <Input
             label="Resource Title"
-            placeholder="e.g. HC Verma Vol 1 Chapter 10 or Galaxy Revision Lecture"
-            value={resTitle}
-            onChange={(e) => setResTitle(e.target.value)}
+            placeholder="e.g. HC Verma Chapter 3 Solutions"
+            value={resourceTitle}
+            onChange={(e) => setResourceTitle(e.target.value)}
             required
-            autoFocus
           />
 
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1.5">Resource Type</label>
+            <label className="block text-xs font-medium text-zinc-300 mb-1.5">Resource Type</label>
             <select
-              value={resType}
-              onChange={(e) => setResType(e.target.value as ResourceType)}
-              className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand-500"
+              value={resourceType}
+              onChange={(e) => setResourceType(e.target.value as ResourceType)}
+              className="w-full h-9 bg-zinc-900 border border-zinc-800 rounded-lg px-3 text-xs text-zinc-100 focus:outline-none focus:border-zinc-600 transition-colors"
             >
-              <option value="book">Reference Textbook / Module</option>
-              <option value="notes">Class Notes / Formula Sheet</option>
-              <option value="video">Video Lecture / Masterclass</option>
-              <option value="website">Web Link / Question Bank</option>
-              <option value="other">Other Material</option>
+              <option value="notes">Notes PDF</option>
+              <option value="book">Reference Book</option>
+              <option value="video">Lecture Video</option>
+              <option value="website">Web Link</option>
             </select>
           </div>
 
           <Input
-            label="URL / Online Link (Optional)"
+            label="Resource Link URL (Optional)"
             placeholder="https://..."
-            value={resUrl}
-            onChange={(e) => setResUrl(e.target.value)}
+            type="url"
+            value={resourceUrl}
+            onChange={(e) => setResourceUrl(e.target.value)}
           />
 
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
-            <Button type="button" variant="ghost" onClick={() => setResourceModalOpen(false)}>
+          <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+            <Button variant="ghost" type="button" onClick={() => setResourceModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" variant="glow">
-              Link Resource
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Modal: Add Custom Chapter */}
-      <Modal
-        isOpen={addChapterModalOpen}
-        onClose={() => setAddChapterModalOpen(false)}
-        title="Add Custom Chapter to Unit"
-      >
-        <form onSubmit={handleSaveCustomChapter} className="space-y-4 pt-1">
-          <Input
-            label="Chapter Name"
-            placeholder="e.g. Fluid Mechanics & Surface Tension"
-            value={newChapterName}
-            onChange={(e) => setNewChapterName(e.target.value)}
-            required
-            autoFocus
-          />
-
-          <Textarea
-            label="Subtopics (One per line)"
-            placeholder="Pascal Law\nArchimedes Principle\nBernoulli Theorem"
-            value={newSubtopics}
-            onChange={(e) => setNewSubtopics(e.target.value)}
-            rows={3}
-          />
-
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
-            <Button type="button" variant="ghost" onClick={() => setAddChapterModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="glow">
-              Create Chapter
+            <Button variant="primary" type="submit">
+              Save Resource
             </Button>
           </div>
         </form>

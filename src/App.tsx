@@ -4,7 +4,6 @@ import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { Landing } from './pages/Landing';
 import { Login } from './pages/Login';
-import { AuthCallback } from './pages/AuthCallback';
 import { Onboarding } from './pages/Onboarding';
 import { AppLayout } from './components/layout/AppLayout';
 import { Dashboard } from './pages/Dashboard';
@@ -21,16 +20,18 @@ import { Groups } from './pages/Groups';
 import { Leaderboard } from './pages/Leaderboard';
 import { Settings } from './pages/Settings';
 
+import { AuthCallback } from './pages/AuthCallback';
+
 export function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public Marketing, Login & OAuth Callback */}
+          {/* Public Routes */}
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/onboarding" element={<Onboarding />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
 
           {/* Protected Main Application Shell */}
           <Route path="/app" element={<ProtectedRoute />}>

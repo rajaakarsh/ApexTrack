@@ -34,7 +34,7 @@ export const MergeDataModal: React.FC = () => {
       isOpen={mergeModalOpen}
       onClose={() => setMergeModalOpen(false)}
       title="Cloud Account Sync & Data Merge"
-      description="Connect your local study data with your Supabase Cloud Account."
+      description="Connect your local study data with your Cloud Firestore Account."
       maxWidth="lg"
     >
       <div className="space-y-4 pt-2">
