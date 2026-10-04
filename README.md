@@ -1,6 +1,6 @@
 # ApexTrack
 
-ApexTrack is a focused web operating system designed for competitive exam preparation. It helps students organize study schedules, run deep work focus sessions with ambient audio, track syllabus progress, analyze mock test performance, and log conceptual errors.
+ApexTrack is a web operating system designed for competitive exam preparation. It helps students organize study schedules, run deep work focus sessions with ambient audio, track syllabus progress, analyze mock test performance, and log conceptual errors.
 
 ## Table of Contents
 
@@ -16,10 +16,10 @@ ApexTrack is a focused web operating system designed for competitive exam prepar
 - **Dashboard & Overview**: High-level view of daily focus time, task completion rates, syllabus progress, exam countdowns, and primary weakness diagnostics.
 - **Study Planner**: List and Kanban task management supporting priority levels, subject tagging, schedule search/filters, and ICS calendar file export.
 - **Deep Work Focus Timer**: Supports Pomodoro, Flow (stopwatch), and Custom timer modes integrated with a Web Audio ambient sound engine (40Hz Gamma, Rain, Brown noise, Lo-Fi) and Zen mode.
-- **Syllabus Progress Tracker**: Multi-tier syllabus tracking for exams including JEE Advanced, JEE Main, NEET, GATE CS, UPSC CSE, and CAT, with support for attaching reference links and notes.
+- **Syllabus Progress Tracker**: Multi-tier syllabus tracking for competitive exams (JEE Advanced, JEE Main, NEET, GATE CS, UPSC CSE, and CAT) with support for attaching reference links and notes.
 - **Mock Test Analytics**: Log full-length, sectional, or chapterwise test scorecards with subject breakdowns and score progression charts.
 - **Error & Mistake Log**: Categorize study mistakes (conceptual, calculation, formula, time management, silly mistake) to diagnose weak chapters and define corrective rules.
-- **Daily Questions Counter**: Log problem-solving counts by subject against daily targets, complete with goal celebratory visual effects.
+- **Daily Questions Counter**: Log problem-solving counts by subject against daily targets with goal celebratory visual effects.
 - **Community & Accountability**: Connect with peer study partners, send nudges, create study group cohorts, and view study-time leaderboard rankings.
 - **Authentication & Data Portability**: Supports Supabase Google OAuth authentication, offline guest mode, local data merging, and JSON data export.
 
@@ -30,7 +30,7 @@ ApexTrack is a focused web operating system designed for competitive exam prepar
 
 ## Installation
 
-1. Clone the repository and navigate to the project root:
+1. Clone the repository and navigate to the project directory:
    ```bash
    cd ApexTrack
    ```
@@ -59,14 +59,17 @@ In the project directory, you can run:
   ```bash
   npm run dev
   ```
+
 - **Build for production**:
   ```bash
   npm run build
   ```
+
 - **Run Oxlint linter**:
   ```bash
   npm run lint
   ```
+
 - **Preview production build locally**:
   ```bash
   npm run preview
